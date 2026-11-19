@@ -16,17 +16,32 @@ export interface Profile {
   losses: number;
 }
 
-export async function hashPin(pin: string): Promise<string> {
+const DUMMY_PASSWORD_HASH = `scrypt$${"0".repeat(32)}$${"0".repeat(128)}`;
+
+export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16).toString("hex");
-  const derived = await scrypt(pin, salt, 64) as Buffer;
+  const derived = await scrypt(password, salt, 64) as Buffer;
   return `scrypt$${salt}$${derived.toString("hex")}`;
 }
 
-export async function verifyPin(pin: string, stored: string): Promise<boolean> {
+export async function verifyPassword(password: string, stored: string): Promise<boolean> {
   const [algorithm, salt, savedHex] = stored.split("$");
   if (algorithm !== "scrypt" || !salt || !savedHex || !/^[0-9a-f]{128}$/i.test(savedHex)) return false;
-  const actual = await scrypt(pin, salt, 64) as Buffer;
+  const actual = await scrypt(password, salt, 64) as Buffer;
   return timingSafeEqual(actual, Buffer.from(savedHex, "hex"));
+}
+
+export async function checkAuthAttempt(email: string, request: NextRequest): Promise<boolean> {
+  const { data: allowed, error } = await getSupabaseAdmin().rpc("qp_record_auth_attempt", {
+    p_email: email,
+    p_ip_hash: requestIpHash(request),
+  });
+  if (error) throw new Error(`Authentication rate limit check failed: ${error.message}`);
+  return Boolean(allowed);
+}
+
+export function dummyPasswordHash(): string {
+  return DUMMY_PASSWORD_HASH;
 }
 
 export function hashSessionToken(token: string): string {

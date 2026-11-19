@@ -169,3 +169,5 @@ revoke all on function public.qp_close_paper_trade(uuid, uuid, numeric, numeric)
 grant execute on function public.qp_record_pin_attempt(text, text) to service_role;
 grant execute on function public.qp_open_paper_trade(uuid, text, text, text, text, text, numeric, numeric, numeric, numeric, numeric, numeric) to service_role;
 grant execute on function public.qp_close_paper_trade(uuid, uuid, numeric, numeric) to service_role;
+
+notify pgrst, 'reload schema';
