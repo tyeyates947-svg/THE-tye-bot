@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AssetType, getMarketData, inferAssetType, normalizeSymbol, Timeframe } from "@/lib/market";
 import { getLatestNews, type NewsItem } from "@/lib/news";
+import { evaluateConfluence, headlineSentiment, sentimentScore } from "@/lib/quant-signals";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -9,7 +10,8 @@ interface AnalysisResult {
   symbol: string;
   assetType: AssetType;
   timeframe: Timeframe;
-  direction: "LONG" | "SHORT";
+  decision: "BUY" | "SELL" | "WAIT";
+  direction: "LONG" | "SHORT" | "WAIT";
   entryPrice: number;
   takeProfit: number;
   stopLoss: number;
@@ -21,6 +23,7 @@ interface AnalysisResult {
   rationale: string;
   riskNote: string;
   market: Omit<Awaited<ReturnType<typeof getMarketData>>, "candles">;
+  newsInsights: Array<NewsItem & { sentiment: "bullish" | "bearish" | "neutral" }>;
 }
 
 const watchlist: Array<[string, AssetType]> = [
@@ -33,14 +36,15 @@ function roundPrice(price: number): number {
   return Number(price.toFixed(decimals));
 }
 
-function sentimentFromNews(items: NewsItem[]): number {
-  const positive = /\b(gain|surge|beats|growth|bullish|record|rise|rally|approval|upgrade|profit|inflow)\b/gi;
-  const negative = /\b(loss|drop|fall|miss|bearish|lawsuit|decline|selloff|downgrade|risk|outflow|crash)\b/gi;
-  const text = items.map((item) => item.title).join(" ");
-  return Math.max(-1, Math.min(1, ((text.match(positive)?.length ?? 0) - (text.match(negative)?.length ?? 0)) / 3));
-}
-
-async function getCommentary(apiKey: string, question: string, market: AnalysisResult["market"], direction: string, news: NewsItem[]): Promise<string> {
+async function getCommentary(
+  apiKey: string,
+  question: string,
+  market: AnalysisResult["market"],
+  decision: AnalysisResult["decision"],
+  direction: AnalysisResult["direction"],
+  news: NewsItem[],
+  levels: Pick<AnalysisResult, "entryPrice" | "takeProfit" | "stopLoss" | "winProbability" | "targetProfitGBP" | "maxRiskGBP" | "allocationGBP">,
+): Promise<string> {
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
@@ -49,8 +53,14 @@ async function getCommentary(apiKey: string, question: string, market: AnalysisR
       model: "llama-3.3-70b-versatile",
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: "Return JSON with a concise 'rationale' field only. Explain technical evidence and relevant uncertainty in plain language. Never promise profits or assert unsupported facts." },
-        { role: "user", content: JSON.stringify({ question, symbol: market.symbol, direction, price: market.price, indicators: market.indicators, news: news.map((item) => item.title), dataSource: market.source }) },
+        { role: "system", content: "You are a sharp UK trading mate texting: concise, direct, natural, lowercase is fine, zero corporate filler. Return a JSON object with one string field 'message'. No financial advice or promises. Respect the supplied decision exactly; if it is WAIT, clearly say to leave it alone and never suggest entering. Mention the news headlines and whether they read bullish, bearish or neutral. Do not invent prices, facts or headlines." },
+        { role: "user", content: JSON.stringify({
+          question, symbol: market.symbol, timeframe: market.timeframe, decision, direction,
+          price: market.price, indicators: market.indicators,
+          news: news.slice(0, 3).map((item) => ({ title: item.title, sentiment: headlineSentiment(item.title) })),
+          levels: decision === "WAIT" ? null : levels,
+          dataSource: market.source,
+        }) },
       ],
       temperature: 0.3,
       max_tokens: 220,
@@ -60,11 +70,15 @@ async function getCommentary(apiKey: string, question: string, market: AnalysisR
   const payload = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
   const content = payload.choices?.[0]?.message?.content;
   if (!content) throw new Error("Groq returned no analysis.");
-  const parsed = JSON.parse(content) as { rationale?: string };
-  return parsed.rationale ?? "Technical conditions are mixed; use the levels as a scenario, not a forecast.";
+  const parsed = JSON.parse(content) as { message?: string };
+  if (typeof parsed.message !== "string" || !parsed.message.trim()) throw new Error("Groq response did not include a message.");
+  return parsed.message.trim();
 }
 
 export async function POST(request: NextRequest) {
+  if (!process.env.GROQ_API_KEY) {
+    return NextResponse.json({ error: "GROQ_API_KEY is missing. Add it to your Vercel project environment variables to enable AI analysis." }, { status: 503 });
+  }
   try {
     const body = await request.json() as { symbol?: string; assetType?: string; timeframe?: string; budget?: number; question?: string };
     const question = String(body.question ?? "").slice(0, 800);
@@ -74,7 +88,7 @@ export async function POST(request: NextRequest) {
     const budget = Math.min(1_000_000, Math.max(1, Number(body.budget) || 1000));
     const explicitSymbol = question.match(/\b(?:analy[sz]e|for|on|ticker|buy|trade)\s+([A-Z][A-Z0-9.^=-]{0,9})\b/i)?.[1];
     const askedSymbol = normalizeSymbol(explicitSymbol ?? body.symbol ?? "");
-    const scanner = !askedSymbol || /\b(best|find|scan|hunt|right now|maximum profit|top trade|mover)\b/i.test(question);
+    const scanner = !askedSymbol || /\b(best|find|scan|hunt|right now|maximum profit|high[- ]profit|top trade|movers?|pick)\b/i.test(question);
 
     let candidates: Array<{ symbol: string; assetType: AssetType; market: Awaited<ReturnType<typeof getMarketData>>; news: NewsItem[] }>;
     if (scanner) {
@@ -101,16 +115,19 @@ export async function POST(request: NextRequest) {
 
     const ranked = candidates.map((candidate) => {
       const { indicators, changePct } = candidate.market;
-      const trend = indicators.ema9 > indicators.ema21 ? 1 : -1;
       const momentum = Math.min(30, Math.abs(changePct) * 3);
       const volume = Math.min(25, Math.max(0, indicators.volumeSpikePct) * 0.25);
       const rsiQuality = Math.max(0, 20 - Math.abs(indicators.rsi - 55) * 0.35);
-      const sentiment = sentimentFromNews(candidate.news) * 10;
-      return { ...candidate, score: momentum + volume + rsiQuality + (trend > 0 ? 10 : 0) + sentiment };
-    }).sort((a, b) => b.score - a.score);
+      const sentiment = sentimentScore(candidate.news) * 10;
+      const signal = evaluateConfluence(candidate.market, candidate.news);
+      return { ...candidate, signal, score: momentum + volume + rsiQuality + sentiment };
+    }).sort((a, b) => Number(b.signal.decision !== "WAIT") - Number(a.signal.decision !== "WAIT") || b.score - a.score);
     const selected = ranked[0];
     const { market } = selected;
-    const direction: "LONG" | "SHORT" = market.indicators.ema9 >= market.indicators.ema21 ? "LONG" : "SHORT";
+    const { signal } = selected;
+    const decision = signal.decision;
+    const direction: "LONG" | "SHORT" | "WAIT" = decision === "BUY" ? "LONG" : decision === "SELL" ? "SHORT" : "WAIT";
+    const bias = signal.bias;
     const entryPrice = market.price;
     const unitRisk = Math.max(market.indicators.atr || entryPrice * 0.01, entryPrice * 0.001);
     const stopDistance = unitRisk;
@@ -119,34 +136,49 @@ export async function POST(request: NextRequest) {
     const riskBudget = budget * 0.01;
     const riskDrivenUnits = riskBudget / (stopDistance * fx);
     const budgetUnits = budget / (entryPrice * fx);
-    const units = Math.min(riskDrivenUnits, budgetUnits);
+    const units = decision === "WAIT" ? 0 : Math.min(riskDrivenUnits, budgetUnits);
     const maxRiskGBP = units * stopDistance * fx;
     const allocationGBP = units * entryPrice * fx;
-    const winProbability = Math.round(Math.max(38, Math.min(68, 47 + selected.score * 0.2)));
-    let rationale = `${direction === "LONG" ? "Bullish" : "Bearish"} EMA alignment with RSI ${market.indicators.rsi.toFixed(0)} and ${market.indicators.volumeSpikePct.toFixed(0)}% volume change. Levels use a 1 ATR stop and 3 ATR target.`;
-    if (process.env.GROQ_API_KEY) {
-      try {
-        rationale = await getCommentary(process.env.GROQ_API_KEY, question, market, direction, selected.news);
-      } catch (error) {
-        console.warn("Groq analysis unavailable; using indicator-based rationale.", error);
-      }
-    }
+    const winProbability = decision === "WAIT" ? 0 : Math.round(Math.max(52, Math.min(68, 54 + selected.score * 0.15)));
+    const entryPriceRounded = roundPrice(entryPrice);
+    const takeProfitRounded = roundPrice(entryPrice + (bias === "LONG" ? rewardDistance : -rewardDistance));
+    const stopLossRounded = roundPrice(entryPrice + (bias === "LONG" ? -stopDistance : stopDistance));
+    const levels = {
+      entryPrice: entryPriceRounded,
+      takeProfit: takeProfitRounded,
+      stopLoss: stopLossRounded,
+      winProbability,
+      targetProfitGBP: Number((units * rewardDistance * fx).toFixed(2)),
+      maxRiskGBP: Number(maxRiskGBP.toFixed(2)),
+      allocationGBP: Number(allocationGBP.toFixed(2)),
+    };
+    const rationale = await getCommentary(
+      process.env.GROQ_API_KEY,
+      question,
+      market,
+      decision,
+      direction,
+      selected.news,
+      levels,
+    );
 
     const result: AnalysisResult = {
       symbol: selected.symbol,
       assetType: selected.assetType,
       timeframe,
+      decision,
       direction,
-      entryPrice: roundPrice(entryPrice),
-      takeProfit: roundPrice(entryPrice + (direction === "LONG" ? rewardDistance : -rewardDistance)),
-      stopLoss: roundPrice(entryPrice + (direction === "LONG" ? -stopDistance : stopDistance)),
+      entryPrice: entryPriceRounded,
+      takeProfit: takeProfitRounded,
+      stopLoss: stopLossRounded,
       winProbability,
       targetProfitGBP: Number((units * rewardDistance * fx).toFixed(2)),
       maxRiskGBP: Number(maxRiskGBP.toFixed(2)),
       allocationGBP: Number(allocationGBP.toFixed(2)),
       leverage: "1x (no leverage)",
-      rationale,
-      riskNote: "Illustrative, rule-based estimates—not financial advice or a guaranteed outcome. Past price data and simulated fallback candles can be inaccurate. FX uses an approximate conversion for non-GBP assets.",
+      rationale: decision === "WAIT" ? `WAIT — ${signal.reason}. ${rationale}` : rationale,
+      riskNote: "Illustrative estimates only—not financial advice or a guaranteed outcome. Win probability is a heuristic, not a statistically validated forecast. FX for non-GBP assets is approximate.",
+      newsInsights: selected.news.slice(0, 3).map((item) => ({ ...item, sentiment: headlineSentiment(item.title) })),
       market: {
         symbol: market.symbol,
         assetType: market.assetType,
