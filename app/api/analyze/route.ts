@@ -3,6 +3,7 @@ import { AssetType, getMarketData, inferAssetType, normalizeSymbol, Timeframe } 
 import { getLatestNews, type NewsItem } from "@/lib/news";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 interface AnalysisResult {
   symbol: string;
@@ -19,7 +20,7 @@ interface AnalysisResult {
   leverage: string;
   rationale: string;
   riskNote: string;
-  market: Awaited<ReturnType<typeof getMarketData>>;
+  market: Omit<Awaited<ReturnType<typeof getMarketData>>, "candles">;
 }
 
 const watchlist: Array<[string, AssetType]> = [
@@ -146,7 +147,17 @@ export async function POST(request: NextRequest) {
       leverage: "1x (no leverage)",
       rationale,
       riskNote: "Illustrative, rule-based estimates—not financial advice or a guaranteed outcome. Past price data and simulated fallback candles can be inaccurate. FX uses an approximate conversion for non-GBP assets.",
-      market,
+      market: {
+        symbol: market.symbol,
+        assetType: market.assetType,
+        timeframe: market.timeframe,
+        currency: market.currency,
+        price: market.price,
+        changePct: market.changePct,
+        indicators: market.indicators,
+        source: market.source,
+        isFallback: market.isFallback,
+      },
     };
     return NextResponse.json({ ...result, scanned: scanner, scannedSymbols: ranked.map((item) => item.symbol) });
   } catch (error) {

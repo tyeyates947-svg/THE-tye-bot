@@ -14,7 +14,7 @@ interface Analysis {
   symbol: string; assetType: AssetType; timeframe: Timeframe; direction: "LONG" | "SHORT";
   entryPrice: number; takeProfit: number; stopLoss: number; winProbability: number;
   targetProfitGBP: number; maxRiskGBP: number; allocationGBP: number; leverage: string;
-  rationale: string; riskNote: string; market: MarketData; scanned?: boolean;
+  rationale: string; riskNote: string; market: Omit<MarketData, "candles">; scanned?: boolean;
 }
 interface ChatMessage { role: "user" | "assistant"; text: string }
 const movers: Array<{ symbol: string; type: AssetType }> = [
@@ -33,6 +33,24 @@ function currency(value: number, code = "USD"): string {
 function shortTime(timestamp: number): string {
   const date = new Date(timestamp * 1000);
   return date.toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+async function readApiResponse<T>(response: Response, service: string): Promise<T> {
+  const body = await response.text();
+  if (!body.trim()) {
+    throw new Error(`${service} returned an empty response (HTTP ${response.status}). Please try again.`);
+  }
+  let payload: T;
+  try {
+    payload = JSON.parse(body) as T;
+  } catch {
+    throw new Error(`${service} returned an invalid response (HTTP ${response.status}). Please try again.`);
+  }
+  if (!response.ok) {
+    const message = (payload as { error?: string }).error;
+    throw new Error(message || `${service} request failed (HTTP ${response.status}).`);
+  }
+  return payload;
 }
 
 export default function Dashboard() {
@@ -82,9 +100,8 @@ export default function Dashboard() {
         fetch(`/api/market?${params}`),
         fetch(`/api/news?${new URLSearchParams({ symbol: nextSymbol, assetType: nextType })}`),
       ]);
-      const marketPayload = await marketResponse.json() as MarketData | { error?: string };
-      if (!marketResponse.ok || !("candles" in marketPayload)) throw new Error("error" in marketPayload ? marketPayload.error : "Market data could not be loaded.");
-      const newsPayload = await newsResponse.json() as { items?: NewsItem[] };
+      const marketPayload = await readApiResponse<MarketData>(marketResponse, "Market data");
+      const newsPayload = await readApiResponse<{ items?: NewsItem[] }>(newsResponse, "News feed");
       setMarket(marketPayload);
       setNews(newsPayload.items ?? []);
       setAnalysis((previous) => previous?.symbol === nextSymbol && previous.timeframe === nextTimeframe ? previous : null);
@@ -112,8 +129,7 @@ export default function Dashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ symbol, assetType, timeframe, budget, question }),
       });
-      const result = await response.json() as Analysis & { error?: string };
-      if (!response.ok) throw new Error(result.error ?? "Analysis could not be completed.");
+      const result = await readApiResponse<Analysis & { error?: string }>(response, "Analysis service");
       setAnalysis(result);
       setMessages((items) => [...items, { role: "assistant", text: `${result.scanned ? `Scanner pick: ${result.symbol}. ` : `${result.symbol} ${result.direction} idea. `}${result.rationale}\n\nEntry ${currency(result.entryPrice, result.market.currency)} · Target ${currency(result.takeProfit, result.market.currency)} · Stop ${currency(result.stopLoss, result.market.currency)}\nIllustrative target +£${result.targetProfitGBP.toFixed(2)} / max risk £${result.maxRiskGBP.toFixed(2)}. ${result.riskNote}` }]);
       if (result.symbol !== symbol || result.assetType !== assetType || result.timeframe !== timeframe) {
