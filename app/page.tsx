@@ -14,7 +14,7 @@ import ProfileDialog from "@/components/ProfileDialog";
 import { readApiResponse, withSession } from "@/lib/client-api";
 import type { AssetType, MarketData, Timeframe } from "@/lib/market";
 import type { Profile } from "@/lib/session";
-import type { AnalysisPayload, FuturePlan, PaperTrade } from "@/lib/types";
+import type { AnalysisMode, AnalysisPayload, FuturePlan, PaperTrade } from "@/lib/types";
 
 interface NewsItem { title: string; source: string; timestamp: number; url: string }
 type Analysis = AnalysisPayload;
@@ -41,6 +41,7 @@ export default function Dashboard() {
   const [symbol, setSymbol] = useState("NVDA");
   const [assetType, setAssetType] = useState<AssetType>("stock");
   const [timeframe, setTimeframe] = useState<Timeframe>("5m");
+  const [analysisMode, setAnalysisMode] = useState<AnalysisMode>("hunter");
   const [query, setQuery] = useState("");
   const [searchType, setSearchType] = useState<"auto" | AssetType>("auto");
   const [market, setMarket] = useState<MarketData | null>(null);
@@ -156,7 +157,7 @@ export default function Dashboard() {
       const response = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ symbol, assetType, timeframe, budget, question }),
+        body: JSON.stringify({ symbol, assetType, timeframe, mode: analysisMode, budget, question }),
       });
       const result = await readApiResponse<Analysis & { error?: string }>(response, "Analysis service");
       setAnalysis(result);
@@ -193,6 +194,12 @@ export default function Dashboard() {
     if (nextTimeframe === timeframe) return;
     setTimeframe(nextTimeframe);
     void loadAsset(symbol, assetType, nextTimeframe);
+  };
+
+  const changeAnalysisMode = (nextMode: AnalysisMode) => {
+    if (nextMode === analysisMode) return;
+    setAnalysisMode(nextMode);
+    setAnalysis(null);
   };
 
   const handleBudget = (value: string) => {
@@ -233,6 +240,7 @@ export default function Dashboard() {
           assetType: activeAnalysis.assetType,
           direction: activeAnalysis.direction,
           timeframe: activeAnalysis.timeframe,
+          mode: activeAnalysis.mode,
           amountGBP: Number(tradeStake),
           entryPrice: activeAnalysis.entryPrice,
           takeProfit: activeAnalysis.takeProfit,
@@ -270,7 +278,8 @@ export default function Dashboard() {
     setChatText("");
     void runAnalysis(question);
   };
-  const activeAnalysis = analysis?.symbol === symbol && analysis.assetType === assetType && analysis.timeframe === timeframe ? analysis : null;
+  const activeAnalysis = analysis?.symbol === symbol && analysis.assetType === assetType
+    && analysis.timeframe === timeframe && analysis.mode === analysisMode ? analysis : null;
   const stakeScale = activeAnalysis?.allocationGBP ? Math.max(0, Number(tradeStake) || 0) / activeAnalysis.allocationGBP : 0;
   const stakeTargetGBP = (activeAnalysis?.targetProfitGBP ?? 0) * stakeScale;
   const stakeRiskGBP = (activeAnalysis?.maxRiskGBP ?? 0) * stakeScale;
@@ -312,9 +321,15 @@ export default function Dashboard() {
             <span className="section-label">Quick markets</span>
             {movers.map((item) => <button key={item.symbol} className={`chip ${symbol === item.symbol ? "selected" : ""}`} onClick={() => void loadAsset(item.symbol, item.type)}>{item.symbol}</button>)}
           </div>
-          <div className="time-toggle" role="group" aria-label="Chart timeframe">
-            <button className={timeframe === "5m" ? "active" : ""} onClick={() => changeTimeframe("5m")}><Clock3 size={12} style={{ verticalAlign: "middle", marginRight: 5 }} />5m Scalp</button>
-            <button className={timeframe === "1d" ? "active" : ""} onClick={() => changeTimeframe("1d")}><TrendingUp size={12} style={{ verticalAlign: "middle", marginRight: 5 }} />1D Long-term</button>
+          <div className="signal-controls">
+            <div className="time-toggle" role="group" aria-label="Chart timeframe">
+              <button className={timeframe === "5m" ? "active" : ""} onClick={() => changeTimeframe("5m")}><Clock3 size={12} style={{ verticalAlign: "middle", marginRight: 5 }} />5m Scalp</button>
+              <button className={timeframe === "1d" ? "active" : ""} onClick={() => changeTimeframe("1d")}><TrendingUp size={12} style={{ verticalAlign: "middle", marginRight: 5 }} />1D Long-term</button>
+            </div>
+            <div className="mode-toggle" role="group" aria-label="Signal mode">
+              <button className={analysisMode === "hunter" ? "active" : ""} aria-pressed={analysisMode === "hunter"} onClick={() => changeAnalysisMode("hunter")}>High-Profit Hunter</button>
+              <button className={analysisMode === "sniper" ? "active" : ""} aria-pressed={analysisMode === "sniper"} onClick={() => changeAnalysisMode("sniper")}>Strict Sniper</button>
+            </div>
           </div>
         </div>
 
@@ -373,7 +388,8 @@ export default function Dashboard() {
               <section className="panel">
                 <div className="panel-heading"><div className="panel-title"><Sparkles size={14} /> Trade scenario</div><span className={`panel-kicker ${activeAnalysis?.decision === "WAIT" ? "negative" : ""}`}>{activeAnalysis ? activeAnalysis.decision : "Awaiting analysis"}</span></div>
                 {activeAnalysis ? <div className="trade-content">
-                  {activeAnalysis.decision === "WAIT" ? <div className="wait-card"><strong>WAIT · no qualified setup</strong><span>RSI, EMA trend, volume and live news must all align before sizing a paper trade.</span></div> : <>
+                  {activeAnalysis.decision === "WAIT" ? <div className="wait-card"><strong>WAIT · no qualified setup</strong><span>{activeAnalysis.rationale}</span></div> : <>
+                  <p className="signal-rationale">{activeAnalysis.rationale}</p>
                   <div className="trade-stat-row">
                     <div className="trade-stat"><label>Est. target at stake</label><strong className="positive">+£{stakeTargetGBP.toFixed(2)}</strong></div>
                     <div className="trade-stat"><label>Max risk at stake</label><strong className="negative">−£{stakeRiskGBP.toFixed(2)}</strong></div>
@@ -397,7 +413,7 @@ export default function Dashboard() {
           </div>
 
           <aside className="panel chat-panel">
-            <div className="chat-heading"><div className="bot-icon"><Bot size={17} /></div><div><div className="chat-title">Quant AI assistant</div><div className="chat-status"><span className="source-dot" /> Groq · Llama 3.3 70B · strict confluence</div></div><button className="icon-button" title="AI analysis details" onClick={() => setMessages((items) => [...items, { role: "assistant", text: "I only mark a setup BUY or SELL when RSI, EMA trend, volume and headline sentiment align. If they clash or data is missing, it’s WAIT. Probability is a heuristic, not a proven forecast." }])}><CircleHelp size={14} /></button></div>
+            <div className="chat-heading"><div className="bot-icon"><Bot size={17} /></div><div><div className="chat-title">Quant AI assistant</div><div className="chat-status"><span className="source-dot" /> Groq · GPT OSS · {analysisMode === "hunter" ? "2-of-4 Hunter" : "Strict Sniper"}</div></div><button className="icon-button" title="AI analysis details" onClick={() => setMessages((items) => [...items, { role: "assistant", text: analysisMode === "hunter" ? "High-Profit Hunter looks for two or more of four directional signals: EMA trend, RSI momentum, volume with candle direction, and news. It waits on flat markets, conflicting signals, or simulated data. Paper levels target 1:3 risk/reward; still verify the setup yourself." : "Strict Sniper needs at least three aligned signals including the full EMA trend, with no opposing confirmations. It waits on flat markets, conflicting signals, or simulated data. Paper levels target 1:3 risk/reward; still verify the setup yourself." }])}><CircleHelp size={14} /></button></div>
             <div className="chat-body">
               {!messages.length && <div className="welcome-card"><strong>Your market co-pilot</strong>Ask for a ticker breakdown or scan the watchlist for technical momentum. I’ll size an illustrative scenario to your £{budget.toLocaleString("en-GB")} budget.</div>}
               {messages.map((message, index) => <div className={`chat-line ${message.role}`} key={`${index}-${message.role}`}><ProfileAvatar avatarUrl={message.role === "user" ? profile?.avatar_url : "pulse:lime"} username={profile?.username} size={24} /><div className={`chat-message ${message.role}`}>{message.text}</div></div>)}

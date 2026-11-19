@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AssetType, getMarketData, inferAssetType, normalizeSymbol, Timeframe } from "@/lib/market";
 import { getLatestNews, type NewsItem } from "@/lib/news";
 import { evaluateConfluence, headlineSentiment, sentimentScore } from "@/lib/quant-signals";
+import type { AnalysisMode } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -10,6 +11,7 @@ interface AnalysisResult {
   symbol: string;
   assetType: AssetType;
   timeframe: Timeframe;
+  mode: AnalysisMode;
   decision: "BUY" | "SELL" | "WAIT";
   direction: "LONG" | "SHORT" | "WAIT";
   entryPrice: number;
@@ -87,8 +89,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "GROQ_API_KEY is missing. Add it to your Vercel project environment variables to enable AI analysis." }, { status: 503 });
   }
   try {
-    const body = await request.json() as { symbol?: string; assetType?: string; timeframe?: string; budget?: number; question?: string };
+    const body = await request.json() as { symbol?: string; assetType?: string; timeframe?: string; mode?: AnalysisMode; budget?: number; question?: string };
     const question = String(body.question ?? "").slice(0, 800);
+    const mode: AnalysisMode = body.mode === "sniper" ? "sniper" : "hunter";
     const timeframe: Timeframe = /\b(5m|5-minute|scalp|intraday)\b/i.test(question)
       ? "5m"
       : /\b(1d|long[- ]term|swing|hold)\b/i.test(question) ? "1d" : body.timeframe === "5m" ? "5m" : "1d";
@@ -126,9 +129,10 @@ export async function POST(request: NextRequest) {
       const volume = Math.min(25, Math.max(0, indicators.volumeSpikePct) * 0.25);
       const rsiQuality = Math.max(0, 20 - Math.abs(indicators.rsi - 55) * 0.35);
       const sentiment = sentimentScore(candidate.news) * 10;
-      const signal = evaluateConfluence(candidate.market, candidate.news);
+      const signal = evaluateConfluence(candidate.market, candidate.news, mode);
       return { ...candidate, signal, score: momentum + volume + rsiQuality + sentiment };
-    }).sort((a, b) => Number(b.signal.decision !== "WAIT") - Number(a.signal.decision !== "WAIT") || b.score - a.score);
+    }).sort((a, b) => Number(b.signal.decision !== "WAIT") - Number(a.signal.decision !== "WAIT")
+      || b.signal.confirmationCount - a.signal.confirmationCount || b.score - a.score);
     const selected = ranked[0];
     const { market } = selected;
     const { signal } = selected;
@@ -173,6 +177,7 @@ export async function POST(request: NextRequest) {
       symbol: selected.symbol,
       assetType: selected.assetType,
       timeframe,
+      mode,
       decision,
       direction,
       entryPrice: entryPriceRounded,
@@ -183,7 +188,7 @@ export async function POST(request: NextRequest) {
       maxRiskGBP: Number(maxRiskGBP.toFixed(2)),
       allocationGBP: Number(allocationGBP.toFixed(2)),
       leverage: "1x (no leverage)",
-      rationale: decision === "WAIT" ? `WAIT — ${signal.reason}. ${rationale}` : rationale,
+      rationale: decision === "WAIT" ? `WAIT — ${signal.reason}. ${rationale}` : `${signal.reason}. ${rationale}`,
       riskNote: "Illustrative estimates only—not financial advice or a guaranteed outcome. Win probability is a heuristic, not a statistically validated forecast. FX for non-GBP assets is approximate.",
       newsInsights: selected.news.slice(0, 3).map((item) => ({ ...item, sentiment: headlineSentiment(item.title) })),
       market: {

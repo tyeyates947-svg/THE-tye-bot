@@ -53,6 +53,10 @@ button { cursor: pointer; }
 .time-toggle { display: flex; padding: 3px; border: 1px solid var(--border); border-radius: 8px; background: #101310; }
 .time-toggle button { color: #818981; padding: 7px 11px; background: transparent; border: 0; border-radius: 5px; font-size: 11px; }
 .time-toggle button.active { background: #252d23; color: var(--lime); }
+.signal-controls { display: flex; align-items: center; gap: 8px; }
+.mode-toggle { display: flex; padding: 3px; border: 1px solid var(--border); border-radius: 8px; background: #101310; }
+.mode-toggle button { color: #818981; padding: 7px 9px; background: transparent; border: 0; border-radius: 5px; font-size: 10px; white-space: nowrap; }
+.mode-toggle button.active { background: #252d23; color: var(--lime); }
 .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 16px; align-items: start; }
 .left-stack { min-width: 0; display: grid; gap: 15px; }
 .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 11px; }
@@ -86,6 +90,7 @@ button { cursor: pointer; }
 .panel-title svg { color: var(--lime); }
 .panel-kicker { color: #7f887f; font-size: 10px; }
 .trade-content { padding: 14px 17px; }
+.signal-rationale { margin: 0 0 12px; color: #aab2ab; font-size: 10px; line-height: 1.5; }
 .trade-stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .trade-stat { background: #171b17; border: 1px solid #222922; border-radius: 7px; padding: 10px; }
 .trade-stat label { display: block; color: #8c958d; font-size: 9px; }
@@ -264,6 +269,8 @@ button { cursor: pointer; }
   .search-select { height: 38px; padding: 0 5px; font-size: 10px; }
   .lime-button { padding: 0 10px; height: 38px; }
   .toolbar { align-items: flex-start; flex-direction: column-reverse; gap: 12px; }
+  .signal-controls { width: 100%; flex-wrap: wrap; }
+  .mode-toggle button { padding: 7px 8px; font-size: 9px; }
   .mover-list { gap: 6px; }
   .section-label { width: 100%; }
   .chip { padding: 0 9px; }

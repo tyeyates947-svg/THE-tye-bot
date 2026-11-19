@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getMarketData, inferAssetType, normalizeSymbol } from "@/lib/market";
 import { getLatestNews } from "@/lib/news";
 import { evaluateConfluence } from "@/lib/quant-signals";
+import type { AnalysisMode } from "@/lib/types";
 import { getSessionProfile } from "@/lib/session";
 import { getSupabaseAdmin } from "@/lib/supabase";
 
@@ -48,11 +49,12 @@ export async function POST(request: NextRequest) {
     if (!session) return NextResponse.json({ error: "Sign in to open a paper trade." }, { status: 401 });
     const body = await request.json() as {
       symbol?: string; assetType?: string; direction?: string; timeframe?: string; amountGBP?: number;
-      entryPrice?: number; takeProfit?: number; stopLoss?: number;
+      entryPrice?: number; takeProfit?: number; stopLoss?: number; mode?: AnalysisMode;
     };
     const symbol = normalizeSymbol(String(body.symbol ?? ""));
     const assetType = inferAssetType(symbol, body.assetType);
     const timeframe = body.timeframe === "5m" ? "5m" : "1d";
+    const mode: AnalysisMode = body.mode === "sniper" ? "sniper" : "hunter";
     const rawAmount = Number(body.amountGBP);
     const amountGBP = Number.isFinite(rawAmount) ? Number(rawAmount.toFixed(2)) : Number.NaN;
     const entryPrice = Number(body.entryPrice);
@@ -67,7 +69,7 @@ export async function POST(request: NextRequest) {
     }
     const market = await getMarketData(symbol, timeframe, assetType);
     const news = await getLatestNews(symbol, assetType).catch(() => []);
-    const signal = evaluateConfluence(market, news);
+    const signal = evaluateConfluence(market, news, mode);
     if (signal.decision === "WAIT" || signal.decision === "BUY" && direction !== "LONG" || signal.decision === "SELL" && direction !== "SHORT") {
       return NextResponse.json({ error: "Live confluence has changed or is no longer confirmed. Refresh the AI setup before paper trading." }, { status: 409 });
     }

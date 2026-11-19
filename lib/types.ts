@@ -1,9 +1,12 @@
 import type { AssetType, MarketData, Timeframe } from "@/lib/market";
 
+export type AnalysisMode = "hunter" | "sniper";
+
 export interface AnalysisPayload {
   symbol: string;
   assetType: AssetType;
   timeframe: Timeframe;
+  mode: AnalysisMode;
   decision: "BUY" | "SELL" | "WAIT";
   direction: "LONG" | "SHORT" | "WAIT";
   entryPrice: number;
