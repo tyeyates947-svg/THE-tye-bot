@@ -47,39 +47,50 @@ async function getCommentary(
   news: NewsItem[],
   levels: Pick<AnalysisResult, "entryPrice" | "takeProfit" | "stopLoss" | "winProbability" | "targetProfitGBP" | "maxRiskGBP" | "allocationGBP">,
 ): Promise<string> {
-  const requestBody = {
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: "You are a sharp UK trading mate texting: concise, direct, natural, lowercase is fine, zero corporate filler. Return a JSON object with one string field 'message'. No financial advice or promises. Respect the supplied decision exactly; if it is WAIT, clearly say to leave it alone and never suggest entering. Mention the news headlines and whether they read bullish, bearish or neutral. Do not invent prices, facts or headlines." },
-      { role: "user", content: JSON.stringify({
+  const messages = [
+    { role: "system", content: "You are a sharp UK trading mate texting: concise, direct, natural, lowercase is fine, zero corporate filler. Output ONLY raw valid JSON with one string field 'message'; do not include markdown fences or any text outside the JSON object. No financial advice or promises. Respect the supplied decision exactly; if it is WAIT, clearly say to leave it alone and never suggest entering. Mention the news headlines and whether they read bullish, bearish or neutral. Do not invent prices, facts or headlines." },
+    { role: "user", content: JSON.stringify({
         question, symbol: market.symbol, timeframe: market.timeframe, decision, direction,
         price: market.price, indicators: market.indicators,
         news: news.slice(0, 3).map((item) => ({ title: item.title, sentiment: headlineSentiment(item.title) })),
         levels: decision === "WAIT" ? null : levels,
         dataSource: market.source,
-      }) },
-    ],
-    temperature: 0.3,
-    max_tokens: 220,
-  };
-  const models = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"];
+    }) },
+  ];
+  const models = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"];
   let response: Response | undefined;
   for (const [index, model] of models.entries()) {
     response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       signal: AbortSignal.timeout(12000),
-      body: JSON.stringify({ ...requestBody, model }),
+      body: JSON.stringify({ model, messages, temperature: 0.3 }),
     });
-    if (index === 0 && (response.status === 404 || response.status === 429)) continue;
-    break;
+    if (response.ok) break;
+
+    const errorBody = await response.text();
+    console.error(`Groq returned ${response.status}`, errorBody);
+    if ([400, 404, 429].includes(response.status) && index < models.length - 1) continue;
+
+    let errorMessage = errorBody || `Groq ${response.status}`;
+    try {
+      const errorData = JSON.parse(errorBody) as { error?: { message?: unknown } };
+      if (typeof errorData.error?.message === "string" && errorData.error.message) {
+        errorMessage = errorData.error.message;
+      }
+    } catch {
+      // Keep the raw response body when Groq does not return JSON.
+    }
+    throw new Error(errorMessage);
   }
   if (!response) throw new Error("Groq returned no response.");
-  if (!response.ok) throw new Error(`Groq returned ${response.status}`);
   const payload = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
   const content = payload.choices?.[0]?.message?.content;
   if (!content) throw new Error("Groq returned no analysis.");
-  const parsed = JSON.parse(content) as { message?: string };
+  const jsonStart = content.indexOf("{");
+  const jsonEnd = content.lastIndexOf("}");
+  if (jsonStart === -1 || jsonEnd < jsonStart) throw new Error("Groq response did not contain a JSON object.");
+  const parsed = JSON.parse(content.slice(jsonStart, jsonEnd + 1)) as { message?: string };
   if (typeof parsed.message !== "string" || !parsed.message.trim()) throw new Error("Groq response did not include a message.");
   return parsed.message.trim();
 }
