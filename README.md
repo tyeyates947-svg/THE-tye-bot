@@ -12,7 +12,7 @@ npm run dev
 Set these variables in local `.env.local` and in the Vercel project settings:
 
 ```dotenv
-GROQ_API_KEY=                  # Required for AI analysis; Groq llama-3.3-70b-versatile
+GROQ_API_KEY=                  # Required for AI analysis; uses Groq GPT OSS 120B with 20B fallback
 SUPABASE_URL=https://...       # Supabase project URL (NEXT_PUBLIC_SUPABASE_URL also works)
 SUPABASE_SERVICE_ROLE_KEY=     # Server only; never prefix with NEXT_PUBLIC_
 ALPHA_VANTAGE_API_KEY=         # Optional stock-data fallback

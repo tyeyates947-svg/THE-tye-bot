@@ -45,27 +45,34 @@ async function getCommentary(
   news: NewsItem[],
   levels: Pick<AnalysisResult, "entryPrice" | "takeProfit" | "stopLoss" | "winProbability" | "targetProfitGBP" | "maxRiskGBP" | "allocationGBP">,
 ): Promise<string> {
-  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    signal: AbortSignal.timeout(12000),
-    body: JSON.stringify({
-      model: "llama-3.3-70b-versatile",
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: "You are a sharp UK trading mate texting: concise, direct, natural, lowercase is fine, zero corporate filler. Return a JSON object with one string field 'message'. No financial advice or promises. Respect the supplied decision exactly; if it is WAIT, clearly say to leave it alone and never suggest entering. Mention the news headlines and whether they read bullish, bearish or neutral. Do not invent prices, facts or headlines." },
-        { role: "user", content: JSON.stringify({
-          question, symbol: market.symbol, timeframe: market.timeframe, decision, direction,
-          price: market.price, indicators: market.indicators,
-          news: news.slice(0, 3).map((item) => ({ title: item.title, sentiment: headlineSentiment(item.title) })),
-          levels: decision === "WAIT" ? null : levels,
-          dataSource: market.source,
-        }) },
-      ],
-      temperature: 0.3,
-      max_tokens: 220,
-    }),
-  });
+  const requestBody = {
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: "You are a sharp UK trading mate texting: concise, direct, natural, lowercase is fine, zero corporate filler. Return a JSON object with one string field 'message'. No financial advice or promises. Respect the supplied decision exactly; if it is WAIT, clearly say to leave it alone and never suggest entering. Mention the news headlines and whether they read bullish, bearish or neutral. Do not invent prices, facts or headlines." },
+      { role: "user", content: JSON.stringify({
+        question, symbol: market.symbol, timeframe: market.timeframe, decision, direction,
+        price: market.price, indicators: market.indicators,
+        news: news.slice(0, 3).map((item) => ({ title: item.title, sentiment: headlineSentiment(item.title) })),
+        levels: decision === "WAIT" ? null : levels,
+        dataSource: market.source,
+      }) },
+    ],
+    temperature: 0.3,
+    max_tokens: 220,
+  };
+  const models = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"];
+  let response: Response | undefined;
+  for (const [index, model] of models.entries()) {
+    response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(12000),
+      body: JSON.stringify({ ...requestBody, model }),
+    });
+    if (index === 0 && (response.status === 404 || response.status === 429)) continue;
+    break;
+  }
+  if (!response) throw new Error("Groq returned no response.");
   if (!response.ok) throw new Error(`Groq returned ${response.status}`);
   const payload = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
   const content = payload.choices?.[0]?.message?.content;
