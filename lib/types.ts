@@ -22,6 +22,12 @@ export interface AnalysisPayload {
   market: Omit<MarketData, "candles">;
   newsInsights: Array<{ title: string; source: string; url: string; timestamp: number; sentiment: "bullish" | "bearish" | "neutral" }>;
   scanned?: boolean;
+  commentary?: {
+    hook: string;
+    chartSetup: string;
+    newsCatalyst: string;
+    riskNote: string;
+  };
 }
 
 export interface FuturePlan {
@@ -53,4 +59,10 @@ export interface PaperTrade {
   mark_price: number;
   unrealized_pnl_gbp: number;
   is_fallback: boolean;
+  status?: "open" | "closed";
+  pnl_gbp?: number;
+  exit_price?: number | null;
+  closed_at?: string | null;
+  progress_pct?: number;
+  ai_update?: string;
 }

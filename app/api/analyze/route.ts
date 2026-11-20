@@ -23,6 +23,12 @@ interface AnalysisResult {
   allocationGBP: number;
   leverage: string;
   rationale: string;
+  commentary: {
+    hook: string;
+    chartSetup: string;
+    newsCatalyst: string;
+    riskNote: string;
+  };
   riskNote: string;
   market: Omit<Awaited<ReturnType<typeof getMarketData>>, "candles">;
   newsInsights: Array<NewsItem & { sentiment: "bullish" | "bearish" | "neutral" }>;
@@ -46,9 +52,9 @@ async function getCommentary(
   direction: AnalysisResult["direction"],
   news: NewsItem[],
   levels: Pick<AnalysisResult, "entryPrice" | "takeProfit" | "stopLoss" | "winProbability" | "targetProfitGBP" | "maxRiskGBP" | "allocationGBP">,
-): Promise<string> {
+): Promise<AnalysisResult["commentary"]> {
   const messages = [
-    { role: "system", content: "You are a sharp UK trading mate texting: concise, direct, natural, lowercase is fine, zero corporate filler. Output ONLY raw valid JSON with one string field 'message'; do not include markdown fences or any text outside the JSON object. No financial advice or promises. Respect the supplied decision exactly; if it is WAIT, clearly say to leave it alone and never suggest entering. Mention the news headlines and whether they read bullish, bearish or neutral. Do not invent prices, facts or headlines." },
+    { role: "system", content: "You are a sharp UK trading mate. Output ONLY a raw valid JSON object with exactly four concise string fields: hook, chartSetup, newsCatalyst, riskNote. No markdown fences or text outside JSON. hook must be one casual UK-English line. Each remaining field must be one short sentence, never a paragraph. No financial advice or promises. Respect the supplied decision exactly; if WAIT, clearly say to leave it alone and never suggest entering. Mention supplied headlines and their bullish/bearish/neutral sentiment; if none, say no live headline catalyst is available. Do not invent prices, facts or headlines." },
     { role: "user", content: JSON.stringify({
         question, symbol: market.symbol, timeframe: market.timeframe, decision, direction,
         price: market.price, indicators: market.indicators,
@@ -57,7 +63,7 @@ async function getCommentary(
         dataSource: market.source,
     }) },
   ];
-  const models = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"];
+  const models = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"];
   let response: Response | undefined;
   for (const [index, model] of models.entries()) {
     response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -90,9 +96,20 @@ async function getCommentary(
   const jsonStart = content.indexOf("{");
   const jsonEnd = content.lastIndexOf("}");
   if (jsonStart === -1 || jsonEnd < jsonStart) throw new Error("Groq response did not contain a JSON object.");
-  const parsed = JSON.parse(content.slice(jsonStart, jsonEnd + 1)) as { message?: string };
-  if (typeof parsed.message !== "string" || !parsed.message.trim()) throw new Error("Groq response did not include a message.");
-  return parsed.message.trim();
+  const parsed = JSON.parse(content.slice(jsonStart, jsonEnd + 1)) as Partial<AnalysisResult["commentary"]>;
+  const field = (name: keyof AnalysisResult["commentary"], maxLength: number): string => {
+    const value = parsed[name];
+    if (typeof value !== "string" || !value.trim()) throw new Error("Groq response did not include all four structured trade-card fields.");
+    const normalized = value.replace(/\s+/g, " ").trim();
+    const sentence = normalized.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? normalized;
+    return sentence.length > maxLength ? `${sentence.slice(0, maxLength - 1).trimEnd()}…` : sentence;
+  };
+  return {
+    hook: field("hook", 120),
+    chartSetup: field("chartSetup", 180),
+    newsCatalyst: field("newsCatalyst", 180),
+    riskNote: field("riskNote", 180),
+  };
 }
 
 export async function POST(request: NextRequest) {
@@ -174,7 +191,7 @@ export async function POST(request: NextRequest) {
       maxRiskGBP: Number(maxRiskGBP.toFixed(2)),
       allocationGBP: Number(allocationGBP.toFixed(2)),
     };
-    const rationale = await getCommentary(
+    const commentary = await getCommentary(
       process.env.GROQ_API_KEY,
       question,
       market,
@@ -199,7 +216,8 @@ export async function POST(request: NextRequest) {
       maxRiskGBP: Number(maxRiskGBP.toFixed(2)),
       allocationGBP: Number(allocationGBP.toFixed(2)),
       leverage: "1x (no leverage)",
-      rationale: decision === "WAIT" ? `WAIT — ${signal.reason}. ${rationale}` : `${signal.reason}. ${rationale}`,
+      rationale: decision === "WAIT" ? `WAIT — ${signal.reason}. ${commentary.chartSetup}` : `${signal.reason}. ${commentary.chartSetup}`,
+      commentary,
       riskNote: "Illustrative estimates only—not financial advice or a guaranteed outcome. Win probability is a heuristic, not a statistically validated forecast. FX for non-GBP assets is approximate.",
       newsInsights: selected.news.slice(0, 3).map((item) => ({ ...item, sentiment: headlineSentiment(item.title) })),
       market: {

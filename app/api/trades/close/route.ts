@@ -9,7 +9,7 @@ export const maxDuration = 60;
 export async function POST(request: NextRequest) {
   try {
     const session = await getSessionProfile(request);
-    if (!session) return NextResponse.json({ error: "Sign in to close a paper trade." }, { status: 401 });
+    if (!session) return NextResponse.json({ error: "Sign in to close a Trade With." }, { status: 401 });
     const body = await request.json() as { tradeId?: string };
     const tradeId = String(body.tradeId ?? "");
     if (!/^[\da-f-]{36}$/i.test(tradeId)) return NextResponse.json({ error: "Trade ID is invalid." }, { status: 400 });
@@ -33,10 +33,10 @@ export async function POST(request: NextRequest) {
       p_exit_price: market.price,
       p_pnl_gbp: pnlGBP,
     });
-    if (error) throw new Error(`Could not close paper trade: ${error.message}`);
+    if (error) throw new Error(`Could not close Trade With: ${error.message}`);
     return NextResponse.json({ exitPrice: market.price, pnlGBP, balanceGBP: Number(data.balance_gbp) });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Could not close paper trade.";
+    const message = error instanceof Error ? error.message : "Could not close Trade With.";
     const status = message.includes("Supabase is not configured") ? 503 : 500;
     return NextResponse.json({ error: message }, { status });
   }

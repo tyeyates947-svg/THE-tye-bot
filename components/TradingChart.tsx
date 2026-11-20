@@ -16,9 +16,10 @@ interface TradingChartProps {
   entry?: number;
   takeProfit?: number;
   stopLoss?: number;
+  theme: string;
 }
 
-export default function TradingChart({ candles, entry, takeProfit, stopLoss }: TradingChartProps) {
+export default function TradingChart({ candles, entry, takeProfit, stopLoss, theme }: TradingChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -26,21 +27,26 @@ export default function TradingChart({ candles, entry, takeProfit, stopLoss }: T
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+    const styles = getComputedStyle(document.querySelector(".app-shell") ?? document.documentElement);
+    const accent = styles.getPropertyValue("--lime").trim() || "#b1f26a";
+    const background = styles.getPropertyValue("--panel").trim() || "#101310";
+    const border = styles.getPropertyValue("--border").trim() || "#1d221e";
+    const muted = styles.getPropertyValue("--muted").trim() || "#89918b";
     const chart = createChart(container, {
       width: container.clientWidth,
       height: container.clientHeight,
-      layout: { background: { type: ColorType.Solid, color: "#101310" }, textColor: "#89918b", fontFamily: "Inter, sans-serif" },
-      grid: { vertLines: { color: "#1d221e" }, horzLines: { color: "#1d221e" } },
-      rightPriceScale: { borderColor: "#292f2a" },
-      timeScale: { borderColor: "#292f2a", timeVisible: true, secondsVisible: false },
+      layout: { background: { type: ColorType.Solid, color: background }, textColor: muted, fontFamily: "Inter, sans-serif" },
+      grid: { vertLines: { color: border }, horzLines: { color: border } },
+      rightPriceScale: { borderColor: border },
+      timeScale: { borderColor: border, timeVisible: true, secondsVisible: false },
       crosshair: { vertLine: { color: "#5c695f", labelBackgroundColor: "#303a32" }, horzLine: { color: "#5c695f", labelBackgroundColor: "#303a32" } },
     });
     const series = chart.addSeries(CandlestickSeries, {
-      upColor: "#b1f26a",
+      upColor: accent,
       downColor: "#fa7268",
-      borderUpColor: "#b1f26a",
+      borderUpColor: accent,
       borderDownColor: "#fa7268",
-      wickUpColor: "#b1f26a",
+      wickUpColor: accent,
       wickDownColor: "#fa7268",
     });
     chartRef.current = chart;
@@ -56,7 +62,7 @@ export default function TradingChart({ candles, entry, takeProfit, stopLoss }: T
       chartRef.current = null;
       seriesRef.current = null;
     };
-  }, []);
+  }, [theme]);
 
   useEffect(() => {
     const chart = chartRef.current;
@@ -72,10 +78,11 @@ export default function TradingChart({ candles, entry, takeProfit, stopLoss }: T
     series.priceScale().applyOptions({ autoScale: true });
     for (const priceLine of series.priceLines()) series.removePriceLine(priceLine);
     if (entry) series.createPriceLine({ price: entry, color: "#d9deda", lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "ENTRY" });
-    if (takeProfit) series.createPriceLine({ price: takeProfit, color: "#b1f26a", lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "TAKE PROFIT" });
+    const accent = getComputedStyle(document.querySelector(".app-shell") ?? document.documentElement).getPropertyValue("--lime").trim() || "#b1f26a";
+    if (takeProfit) series.createPriceLine({ price: takeProfit, color: accent, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "TAKE PROFIT" });
     if (stopLoss) series.createPriceLine({ price: stopLoss, color: "#fa7268", lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "STOP LOSS" });
     chart.timeScale().fitContent();
-  }, [candles, entry, takeProfit, stopLoss]);
+  }, [candles, entry, takeProfit, stopLoss, theme]);
 
   return <div ref={containerRef} className="chart-canvas" aria-label="Interactive market candlestick chart" />;
 }

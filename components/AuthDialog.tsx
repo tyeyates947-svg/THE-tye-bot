@@ -9,7 +9,7 @@ import { readApiResponse } from "@/lib/client-api";
 
 interface AuthDialogProps {
   onClose: () => void;
-  onAuthenticated: (token: string, profile: Profile) => void;
+  onAuthenticated: (token: string, profile: Profile, isNewAccount: boolean) => void;
 }
 
 export default function AuthDialog({ onClose, onAuthenticated }: AuthDialogProps) {
@@ -33,7 +33,7 @@ export default function AuthDialog({ onClose, onAuthenticated }: AuthDialogProps
         body: JSON.stringify({ email, password, ...(mode === "register" ? { username, avatarUrl } : {}) }),
       });
       const result = await readApiResponse<{ token: string; profile: Profile }>(response, "Account service");
-      onAuthenticated(result.token, result.profile);
+      onAuthenticated(result.token, result.profile, mode === "register");
       onClose();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not sign in.");
@@ -44,7 +44,7 @@ export default function AuthDialog({ onClose, onAuthenticated }: AuthDialogProps
     <div className="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <form className="auth-card email-auth-card" onSubmit={(event) => void submit(event)}>
         <div className="auth-header">
-          <div className="auth-brand"><div className="brand-mark">⚡</div><div><h2 id="auth-title">{mode === "login" ? "Welcome back" : "Join QuantPulse"}</h2><p>{mode === "login" ? "Your paper portfolio is waiting." : "Create a paper-trading profile."}</p></div></div>
+          <div className="auth-brand"><div className="brand-mark">⚡</div><div><h2 id="auth-title">{mode === "login" ? "Welcome back" : "Join QuantPulse"}</h2><p>{mode === "login" ? "Your Trade Withs are waiting." : "Create your QuantPulse profile."}</p></div></div>
           <button type="button" className="icon-button" aria-label="Close dialog" onClick={onClose}><X size={15} /></button>
         </div>
         <div className="auth-fields">

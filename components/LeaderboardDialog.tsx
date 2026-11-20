@@ -10,9 +10,9 @@ interface Leader {
   return_pct: number; wins: number; losses: number; open_positions: Array<{ symbol: string; direction: string }>;
 }
 
-interface LeaderboardDialogProps { onClose: () => void }
+interface LeaderboardDialogProps { onClose: () => void; onSelectTrader: (username: string) => void }
 
-export default function LeaderboardDialog({ onClose }: LeaderboardDialogProps) {
+export default function LeaderboardDialog({ onClose, onSelectTrader }: LeaderboardDialogProps) {
   const [rows, setRows] = useState<Leader[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -29,21 +29,21 @@ export default function LeaderboardDialog({ onClose }: LeaderboardDialogProps) {
   return (
     <div className="auth-modal" role="dialog" aria-modal="true" aria-labelledby="leaderboard-title" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section className="auth-card leaderboard-card">
-        <div className="auth-header"><div className="profile-header"><div className="bot-icon"><Trophy size={18} /></div><div><h2 id="leaderboard-title">Friends leaderboard</h2><p>Paper returns from the QuantPulse community.</p></div></div><button className="icon-button" onClick={onClose} aria-label="Close"><X size={15} /></button></div>
+        <div className="auth-header"><div className="profile-header"><div className="bot-icon"><Trophy size={18} /></div><div><h2 id="leaderboard-title">Friends leaderboard</h2><p>Practice returns from the QuantPulse community.</p></div></div><button className="icon-button" onClick={onClose} aria-label="Close"><X size={15} /></button></div>
         <div className="leaderboard-list">
           {loading && <div className="dialog-loading"><LoaderCircle size={16} className="spin" /> Loading rankings…</div>}
           {error && <div className="error-banner">{error}</div>}
           {!loading && !error && rows.map((row) => (
-            <article key={row.username} className="leader-row">
+            <button type="button" key={row.username} className="leader-row leader-row-button" onClick={() => onSelectTrader(row.username)} aria-label={`View @${row.username}'s public profile`}>
               <span className={`leader-rank ${row.rank <= 3 ? "top" : ""}`}>{String(row.rank).padStart(2, "0")}</span>
               <ProfileAvatar avatarUrl={row.avatar_url} username={row.username} size={38} />
               <div className="leader-main"><strong>@{row.username}</strong><span>{row.wins}W / {row.losses}L {row.open_positions.length ? `· Open: ${row.open_positions.map((position) => position.symbol).join(", ")}` : ""}</span></div>
               <div className="leader-result"><strong className={row.total_profit_gbp >= 0 ? "positive" : "negative"}>{row.total_profit_gbp >= 0 ? "+" : ""}£{row.total_profit_gbp.toFixed(2)}</strong><span>{row.return_pct.toFixed(1)}% return</span></div>
-            </article>
+            </button>
           ))}
-          {!loading && !error && rows.length === 0 && <div className="dialog-loading">No paper traders yet. Be the first on the board.</div>}
+          {!loading && !error && rows.length === 0 && <div className="dialog-loading">No traders yet. Be the first on the board.</div>}
         </div>
-        <p className="auth-hint">Paper-trading results are self-reported by simulated practice positions and do not reflect live investment performance.</p>
+        <p className="auth-hint">Returns are from simulated practice positions and do not reflect live investment performance.</p>
       </section>
     </div>
   );
