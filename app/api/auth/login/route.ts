@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     if (!allowed) return NextResponse.json({ error: "Too many attempts. Try again in 15 minutes." }, { status: 429 });
 
     const { data: row, error } = await supabase.from("profiles")
-      .select("id, username, password_hash, avatar_url, balance_gbp, total_profit_gbp, wins, losses")
+      .select("id, username, password_hash, avatar_url, balance_gbp, total_profit_gbp, wins, losses, paper_account_provider, paper_account_verified, paper_account_balance_gbp, paper_account_equity_gbp, paper_account_profit_gbp, paper_account_win_rate, paper_account_open_profit_gbp, paper_account_closed_profit_gbp, paper_account_open_positions")
       .eq("email", email).maybeSingle();
     if (error) throw new Error(`Could not look up account: ${error.message}`);
     const validPassword = await verifyPassword(password, row?.password_hash ?? dummyPasswordHash());

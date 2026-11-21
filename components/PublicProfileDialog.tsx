@@ -5,6 +5,9 @@ import { LoaderCircle, Users, X } from "lucide-react";
 import ProfileAvatar from "@/components/ProfileAvatar";
 import type { AssetType, Timeframe } from "@/lib/market";
 import { readApiResponse } from "@/lib/client-api";
+import TradeTimingControls from "@/components/TradeTimingControls";
+import type { TradeDuration } from "@/lib/types";
+import { ukDateTimeInput } from "@/lib/date-time";
 
 interface PublicTrade {
   id: string;
@@ -31,6 +34,14 @@ interface PublicProfile {
   total_profit_gbp: number;
   wins: number;
   losses: number;
+  paper_account_provider: "trading212" | "alpaca" | null;
+  paper_account_verified: boolean;
+  paper_account_equity_gbp: number | null;
+  paper_account_profit_gbp: number | null;
+  paper_account_win_rate: number | null;
+  paper_account_open_profit_gbp: number | null;
+  paper_account_closed_profit_gbp: number | null;
+  paper_account_open_positions: number | null;
 }
 
 interface PublicProfileDialogProps {
@@ -38,7 +49,7 @@ interface PublicProfileDialogProps {
   signedIn: boolean;
   onClose: () => void;
   onSignIn: () => void;
-  onTradeWith: (trade: PublicTrade) => void;
+  onTradeWith: (trade: PublicTrade, timing: { entryMode: "now" | "scheduled"; entryAt: string; duration: TradeDuration; customMinutes: string }) => void;
 }
 
 function money(value: number): string {
@@ -51,6 +62,12 @@ export default function PublicProfileDialog({ username, signedIn, onClose, onSig
   const [history, setHistory] = useState<PublicTrade[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [entryMode, setEntryMode] = useState<"now" | "scheduled">("now");
+  const [entryAt, setEntryAt] = useState(() => {
+    return ukDateTimeInput(Date.now() + 60_000);
+  });
+  const [duration, setDuration] = useState<TradeDuration>("1d");
+  const [customMinutes, setCustomMinutes] = useState("30");
 
   useEffect(() => {
     let mounted = true;
@@ -73,7 +90,7 @@ export default function PublicProfileDialog({ username, signedIn, onClose, onSig
         <div className="auth-header">
           <div className="profile-header">
             {profile && <ProfileAvatar avatarUrl={profile.avatar_url} username={profile.username} size={46} />}
-            <div><h2 id="public-profile-title">{profile ? `@${profile.username}` : `@${username}`}</h2><p>Trader profile & public Trade Withs</p></div>
+            <div><h2 id="public-profile-title">{profile ? `@${profile.username}` : `@${username}`}</h2><p>Trader profile &amp; public Trade Withs {profile?.paper_account_verified && <span className="verified-badge">✓ Verified Paper Account</span>}</p></div>
           </div>
           <button className="icon-button" onClick={onClose} aria-label="Close"><X size={15} /></button>
         </div>
@@ -83,6 +100,11 @@ export default function PublicProfileDialog({ username, signedIn, onClose, onSig
           <div className="public-stats">
             <div><span>Win / loss</span><strong>{profile.wins}W / {profile.losses}L</strong></div>
             <div><span>Total profit</span><strong className={profile.total_profit_gbp >= 0 ? "positive" : "negative"}>{money(profile.total_profit_gbp)}</strong></div>
+            {profile.paper_account_verified && <div><span>{profile.paper_account_provider === "alpaca" ? "Alpaca" : "Trading 212"} paper equity</span><strong>£{(profile.paper_account_equity_gbp ?? 0).toFixed(2)}</strong></div>}
+            {profile.paper_account_verified && profile.paper_account_profit_gbp !== null && <div><span>Verified paper P&amp;L</span><strong className={profile.paper_account_profit_gbp >= 0 ? "positive" : "negative"}>{money(profile.paper_account_profit_gbp)}</strong></div>}
+            {profile.paper_account_verified && profile.paper_account_win_rate !== null && <div><span>Paper win rate</span><strong>{profile.paper_account_win_rate.toFixed(1)}%</strong></div>}
+            {profile.paper_account_verified && profile.paper_account_open_profit_gbp !== null && <div><span>Open paper P&amp;L · {profile.paper_account_open_positions ?? 0} positions</span><strong className={profile.paper_account_open_profit_gbp >= 0 ? "positive" : "negative"}>{money(profile.paper_account_open_profit_gbp)}</strong></div>}
+            {profile.paper_account_verified && profile.paper_account_closed_profit_gbp !== null && <div><span>Closed paper P&amp;L</span><strong className={profile.paper_account_closed_profit_gbp >= 0 ? "positive" : "negative"}>{money(profile.paper_account_closed_profit_gbp)}</strong></div>}
           </div>
           <h3 className="profile-section-title"><Users size={14} /> Active Trade Withs</h3>
           <div className="public-trade-list">
@@ -91,7 +113,10 @@ export default function PublicProfileDialog({ username, signedIn, onClose, onSig
               <div><strong>{trade.symbol}</strong><span className={`trade-side ${trade.direction.toLowerCase()}`}>{trade.direction}</span><small>{trade.timeframe} · Entry {trade.currency} {Number(trade.entry_price).toFixed(2)}</small></div>
               <strong className={(trade.unrealized_pnl_gbp ?? 0) >= 0 ? "positive" : "negative"}>{money(trade.unrealized_pnl_gbp ?? 0)}</strong>
               {signedIn
-                ? <button className="lime-button copy-trade-button" onClick={() => onTradeWith(trade)}>Copy / Trade With Too</button>
+                ? <div className="public-copy-controls">
+                  <TradeTimingControls entryMode={entryMode} entryAt={entryAt} duration={duration} customMinutes={customMinutes} onEntryModeChange={setEntryMode} onEntryAtChange={setEntryAt} onDurationChange={setDuration} onCustomMinutesChange={setCustomMinutes} />
+                  <button className="lime-button copy-trade-button" onClick={() => onTradeWith(trade, { entryMode, entryAt, duration, customMinutes })}>{entryMode === "scheduled" ? "Schedule Trade With" : "Copy / Trade With Too"}</button>
+                </div>
                 : <button className="outline-button copy-trade-button" onClick={onSignIn}>Sign in to copy</button>}
             </article>)}
           </div>

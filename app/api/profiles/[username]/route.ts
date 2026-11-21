@@ -11,7 +11,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     if (!/^[a-z0-9_]{3,24}$/.test(username)) return NextResponse.json({ error: "That username is invalid." }, { status: 400 });
     const supabase = getSupabaseAdmin();
     const { data: profile, error: profileError } = await supabase.from("profiles")
-      .select("id, username, avatar_url, balance_gbp, total_profit_gbp, wins, losses")
+      .select("id, username, avatar_url, balance_gbp, total_profit_gbp, wins, losses, paper_account_provider, paper_account_verified, paper_account_balance_gbp, paper_account_equity_gbp, paper_account_profit_gbp, paper_account_win_rate, paper_account_open_profit_gbp, paper_account_closed_profit_gbp, paper_account_open_positions")
       .eq("username", username).maybeSingle();
     if (profileError) throw new Error(`Could not load trader profile: ${profileError.message}`);
     if (!profile) return NextResponse.json({ error: "Trader not found." }, { status: 404 });
@@ -38,6 +38,15 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         total_profit_gbp: Number(profile.total_profit_gbp),
         wins: Number(profile.wins),
         losses: Number(profile.losses),
+        paper_account_provider: profile.paper_account_provider,
+        paper_account_verified: profile.paper_account_verified === true,
+        paper_account_balance_gbp: profile.paper_account_balance_gbp === null ? null : Number(profile.paper_account_balance_gbp),
+        paper_account_equity_gbp: profile.paper_account_equity_gbp === null ? null : Number(profile.paper_account_equity_gbp),
+        paper_account_profit_gbp: profile.paper_account_profit_gbp === null ? null : Number(profile.paper_account_profit_gbp),
+        paper_account_win_rate: profile.paper_account_win_rate === null ? null : Number(profile.paper_account_win_rate),
+        paper_account_open_profit_gbp: profile.paper_account_open_profit_gbp === null ? null : Number(profile.paper_account_open_profit_gbp),
+        paper_account_closed_profit_gbp: profile.paper_account_closed_profit_gbp === null ? null : Number(profile.paper_account_closed_profit_gbp),
+        paper_account_open_positions: profile.paper_account_open_positions === null ? null : Number(profile.paper_account_open_positions),
       },
       active: active.map((trade) => ({
         id: trade.id,

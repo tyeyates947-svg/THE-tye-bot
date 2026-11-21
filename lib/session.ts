@@ -14,6 +14,15 @@ export interface Profile {
   total_profit_gbp: number;
   wins: number;
   losses: number;
+  paper_account_provider: "trading212" | "alpaca" | null;
+  paper_account_verified: boolean;
+  paper_account_balance_gbp: number | null;
+  paper_account_equity_gbp: number | null;
+  paper_account_profit_gbp: number | null;
+  paper_account_win_rate: number | null;
+  paper_account_open_profit_gbp: number | null;
+  paper_account_closed_profit_gbp: number | null;
+  paper_account_open_positions: number | null;
 }
 
 const DUMMY_PASSWORD_HASH = `scrypt$${"0".repeat(32)}$${"0".repeat(128)}`;
@@ -68,6 +77,15 @@ export function publicProfile(row: Record<string, unknown>): Profile {
     total_profit_gbp: Number(row.total_profit_gbp ?? 0),
     wins: Number(row.wins ?? 0),
     losses: Number(row.losses ?? 0),
+    paper_account_provider: row.paper_account_provider === "trading212" || row.paper_account_provider === "alpaca" ? row.paper_account_provider : null,
+    paper_account_verified: row.paper_account_verified === true,
+    paper_account_balance_gbp: row.paper_account_balance_gbp === null || row.paper_account_balance_gbp === undefined ? null : Number(row.paper_account_balance_gbp),
+    paper_account_equity_gbp: row.paper_account_equity_gbp === null || row.paper_account_equity_gbp === undefined ? null : Number(row.paper_account_equity_gbp),
+    paper_account_profit_gbp: row.paper_account_profit_gbp === null || row.paper_account_profit_gbp === undefined ? null : Number(row.paper_account_profit_gbp),
+    paper_account_win_rate: row.paper_account_win_rate === null || row.paper_account_win_rate === undefined ? null : Number(row.paper_account_win_rate),
+    paper_account_open_profit_gbp: row.paper_account_open_profit_gbp === null || row.paper_account_open_profit_gbp === undefined ? null : Number(row.paper_account_open_profit_gbp),
+    paper_account_closed_profit_gbp: row.paper_account_closed_profit_gbp === null || row.paper_account_closed_profit_gbp === undefined ? null : Number(row.paper_account_closed_profit_gbp),
+    paper_account_open_positions: row.paper_account_open_positions === null || row.paper_account_open_positions === undefined ? null : Number(row.paper_account_open_positions),
   };
 }
 
@@ -85,7 +103,7 @@ export async function getSessionProfile(request: NextRequest): Promise<{ profile
     return null;
   }
   const { data: row, error } = await supabase.from("profiles")
-    .select("id, username, avatar_url, balance_gbp, total_profit_gbp, wins, losses")
+    .select("id, username, avatar_url, balance_gbp, total_profit_gbp, wins, losses, paper_account_provider, paper_account_verified, paper_account_balance_gbp, paper_account_equity_gbp, paper_account_profit_gbp, paper_account_win_rate, paper_account_open_profit_gbp, paper_account_closed_profit_gbp, paper_account_open_positions")
     .eq("id", session.profile_id).single();
   if (error || !row) throw new Error(`Could not load profile: ${error?.message ?? "Profile not found"}`);
   return { profile: publicProfile(row), tokenHash };

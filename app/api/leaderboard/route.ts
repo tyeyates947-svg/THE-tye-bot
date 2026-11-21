@@ -7,7 +7,7 @@ export async function GET() {
   try {
     const supabase = getSupabaseAdmin();
     const { data: profiles, error } = await supabase.from("profiles")
-      .select("id, username, avatar_url, balance_gbp, total_profit_gbp, wins, losses")
+      .select("id, username, avatar_url, balance_gbp, total_profit_gbp, wins, losses, paper_account_provider, paper_account_verified, paper_account_balance_gbp, paper_account_equity_gbp, paper_account_profit_gbp")
       .order("total_profit_gbp", { ascending: false }).limit(100);
     if (error) throw new Error(`Could not load leaderboard: ${error.message}`);
     const ids = (profiles ?? []).map((profile) => profile.id);
@@ -15,21 +15,27 @@ export async function GET() {
       ? await supabase.from("paper_trades").select("profile_id, symbol, direction, amount_gbp").in("profile_id", ids).eq("status", "open")
       : { data: [], error: null };
     if (tradesError) throw new Error(`Could not load leaderboard positions: ${tradesError.message}`);
-    const leaderboard = (profiles ?? []).map((profile, index) => {
+    const leaderboard = (profiles ?? []).map((profile) => {
       const positions = (openTrades ?? []).filter((trade) => trade.profile_id === profile.id);
       const initialBalance = Number(profile.balance_gbp) + positions.reduce((sum, trade) => sum + Number(trade.amount_gbp), 0) - Number(profile.total_profit_gbp);
+      const verifiedProfit = profile.paper_account_verified ? Number(profile.paper_account_profit_gbp ?? 0) : 0;
+      const totalProfit = Number(profile.total_profit_gbp);
       return {
-        rank: index + 1,
         username: profile.username,
         avatar_url: profile.avatar_url,
         balance_gbp: Number(profile.balance_gbp),
-        total_profit_gbp: Number(profile.total_profit_gbp),
-        return_pct: initialBalance > 0 ? Number((Number(profile.total_profit_gbp) / initialBalance * 100).toFixed(2)) : 0,
+        total_profit_gbp: totalProfit,
+        combined_profit_gbp: Number((totalProfit + verifiedProfit).toFixed(2)),
+        verified_paper_profit_gbp: profile.paper_account_verified ? verifiedProfit : null,
+        paper_account_provider: profile.paper_account_verified ? profile.paper_account_provider : null,
+        paper_account_verified: profile.paper_account_verified === true,
+        return_pct: initialBalance > 0 ? Number((totalProfit / initialBalance * 100).toFixed(2)) : 0,
         wins: profile.wins,
         losses: profile.losses,
         open_positions: positions,
       };
-    });
+    }).sort((a, b) => b.combined_profit_gbp - a.combined_profit_gbp)
+      .map((row, index) => ({ ...row, rank: index + 1 }));
     return NextResponse.json({ leaderboard });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not load leaderboard.";

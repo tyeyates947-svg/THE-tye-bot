@@ -27,7 +27,7 @@ export async function PATCH(request: NextRequest) {
     const { data: row, error } = await getSupabaseAdmin().from("profiles")
       .update({ avatar_url: avatarUrl, updated_at: new Date().toISOString() })
       .eq("id", session.profile.id)
-      .select("id, username, avatar_url, balance_gbp, total_profit_gbp, wins, losses").single();
+      .select("id, username, avatar_url, balance_gbp, total_profit_gbp, wins, losses, paper_account_provider, paper_account_verified, paper_account_balance_gbp, paper_account_equity_gbp, paper_account_profit_gbp, paper_account_win_rate, paper_account_open_profit_gbp, paper_account_closed_profit_gbp, paper_account_open_positions").single();
     if (error) throw new Error(`Could not save avatar: ${error.message}`);
     return NextResponse.json({ profile: publicProfile(row) });
   } catch (error) {

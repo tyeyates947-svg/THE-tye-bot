@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
       username,
       password_hash: await hashPassword(password),
       avatar_url: avatarUrl,
-    }).select("id, username, avatar_url, balance_gbp, total_profit_gbp, wins, losses").single();
+    }).select("id, username, avatar_url, balance_gbp, total_profit_gbp, wins, losses, paper_account_provider, paper_account_verified, paper_account_balance_gbp, paper_account_equity_gbp, paper_account_profit_gbp, paper_account_win_rate, paper_account_open_profit_gbp, paper_account_closed_profit_gbp, paper_account_open_positions").single();
     if (error) {
       if (error.code === "23505") return NextResponse.json({ error: "That email or username is already in use." }, { status: 409 });
       throw new Error(`Could not create profile: ${error.message}`);

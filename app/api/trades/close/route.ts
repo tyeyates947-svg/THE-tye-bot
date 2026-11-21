@@ -15,10 +15,18 @@ export async function POST(request: NextRequest) {
     if (!/^[\da-f-]{36}$/i.test(tradeId)) return NextResponse.json({ error: "Trade ID is invalid." }, { status: 400 });
     const supabase = getSupabaseAdmin();
     const { data: trade, error: tradeError } = await supabase.from("paper_trades")
-      .select("id, symbol, asset_type, timeframe, direction, entry_price, units, amount_gbp, fx_to_gbp")
-      .eq("id", tradeId).eq("profile_id", session.profile.id).eq("status", "open").maybeSingle();
+      .select("id, symbol, asset_type, timeframe, direction, entry_price, units, amount_gbp, fx_to_gbp, status")
+      .eq("id", tradeId).eq("profile_id", session.profile.id).in("status", ["open", "scheduled"]).maybeSingle();
     if (tradeError) throw new Error(`Could not load trade: ${tradeError.message}`);
     if (!trade) return NextResponse.json({ error: "That open trade could not be found." }, { status: 404 });
+    if (trade.status === "scheduled") {
+      const { error: cancelError } = await supabase.rpc("qp_cancel_scheduled_paper_trade", {
+        p_profile_id: session.profile.id,
+        p_trade_id: tradeId,
+      });
+      if (cancelError) throw new Error(`Could not cancel scheduled Trade With: ${cancelError.message}`);
+      return NextResponse.json({ cancelled: true, pnlGBP: 0 });
+    }
 
     const market = await getMarketData(trade.symbol, trade.timeframe === "5m" ? "5m" : "1d", trade.asset_type);
     if (market.isFallback) {

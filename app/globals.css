@@ -391,3 +391,49 @@ button { cursor: pointer; }
   .trade-progress { order: 3; }
   .notification-panel { top: 112px; }
 }
+
+.trade-timing-controls { display: grid; gap: 8px; margin: 11px 0; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-soft); }
+.trade-time-entry { display: grid; gap: 5px; color: var(--muted); font-size: 9px; }
+.trade-time-entry select, .trade-time-entry input { width: 100%; min-width: 0; height: 33px; padding: 0 8px; border: 1px solid #303830; border-radius: 6px; outline: 0; color: var(--text); background: #0d100d; font-size: 10px; }
+.trade-duration-options { min-width: 0; margin: 0; padding: 0; border: 0; }
+.trade-duration-options legend { margin-bottom: 6px; color: var(--muted); font-size: 9px; }
+.trade-duration-options > div { display: flex; flex-wrap: wrap; gap: 5px; }
+.trade-duration-options button { min-height: 25px; padding: 0 8px; border: 1px solid #303830; border-radius: 5px; color: #aab3ab; background: #101410; font-size: 9px; }
+.trade-duration-options button.selected { border-color: #708f51; color: var(--lime); background: #20291b; }
+.trade-duration-hint { color: #818a82; font-size: 8px; line-height: 1.4; }
+.paper-trade-row .trade-countdown { color: var(--lime); font-variant-numeric: tabular-nums; }
+.new-chat-button { height: 29px; padding: 0 8px; font-size: 9px; }
+.verified-badge { display: inline-flex; align-items: center; gap: 3px; margin-left: 5px; padding: 3px 6px; border: 1px solid #4a6534; border-radius: 5px; color: var(--lime); background: #1c2717; font-size: 8px; font-weight: 650; vertical-align: middle; }
+.leader-main > strong { display: flex; align-items: center; flex-wrap: wrap; }
+.leader-result > span { max-width: 160px; text-align: right; line-height: 1.5; }
+.profile-mini-row > span:nth-last-of-type(1) { white-space: nowrap; }
+.paper-account-section { padding-top: 10px; border-top: 1px solid var(--border); }
+.paper-account-section > label { display: grid; gap: 5px; margin: 8px 0; color: var(--muted); font-size: 9px; }
+.paper-account-section input, .paper-account-section select { width: 100%; height: 35px; padding: 0 9px; border: 1px solid #303830; border-radius: 6px; outline: 0; color: var(--text); background: #0d100d; font-size: 10px; }
+.paper-account-section > .lime-button { width: 100%; height: 36px; margin-top: 3px; font-size: 10px; }
+.verified-account { display: grid; gap: 7px; padding: 10px; border: 1px solid #34452b; border-radius: 7px; color: #b7c1b6; background: #141a12; font-size: 9px; }
+.verified-account > strong { display: flex; align-items: center; gap: 5px; color: var(--lime); }
+.account-actions { display: flex; gap: 7px; }
+.account-actions .outline-button { height: 30px; font-size: 9px; }
+.public-copy-controls { flex: 0 0 100%; display: grid; gap: 5px; }
+.public-copy-controls .trade-timing-controls { margin: 3px 0; }
+.public-copy-controls .copy-trade-button { width: 100%; }
+.goal-plan-details { display: grid; gap: 6px; margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--border); color: #aeb8b0; font-size: 9px; line-height: 1.45; }
+.goal-plan-details b { color: var(--text); }
+.goal-risk-warning { display: flex; align-items: flex-start; gap: 6px; margin: 2px 0; color: #e6b778; }
+.goal-risk-warning svg { flex: 0 0 auto; margin-top: 1px; }
+.goal-planner-form { padding: 12px; border: 1px solid #34452b; border-radius: 8px; background: #141a12; }
+.goal-planner-form .planner-form-title { display: flex; align-items: center; gap: 6px; color: var(--lime); }
+.goal-planner-form > label { display: grid; gap: 5px; color: #9da69e; font-size: 9px; }
+.goal-planner-form > label input { width: 100%; }
+.goal-planner-form > .lime-button { min-height: 36px; }
+.planner-drawer { overflow-y: auto; }
+.planner-list { flex: 1 1 180px; }
+.planner-form { flex: 0 0 auto; }
+
+@media (max-width: 580px) {
+  .trade-timing-controls { padding: 8px; }
+  .planner-drawer { overflow-y: auto; }
+  .planner-list { flex: 1 1 120px; }
+  .leader-result > span { max-width: 125px; font-size: 8px; }
+}

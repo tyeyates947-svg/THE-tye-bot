@@ -7,7 +7,9 @@ import { readApiResponse } from "@/lib/client-api";
 
 interface Leader {
   rank: number; username: string; avatar_url: string; balance_gbp: number; total_profit_gbp: number;
-  return_pct: number; wins: number; losses: number; open_positions: Array<{ symbol: string; direction: string }>;
+  combined_profit_gbp: number; verified_paper_profit_gbp: number | null; paper_account_provider: string | null;
+  paper_account_verified: boolean; return_pct: number; wins: number; losses: number;
+  open_positions: Array<{ symbol: string; direction: string }>;
 }
 
 interface LeaderboardDialogProps { onClose: () => void; onSelectTrader: (username: string) => void }
@@ -37,13 +39,13 @@ export default function LeaderboardDialog({ onClose, onSelectTrader }: Leaderboa
             <button type="button" key={row.username} className="leader-row leader-row-button" onClick={() => onSelectTrader(row.username)} aria-label={`View @${row.username}'s public profile`}>
               <span className={`leader-rank ${row.rank <= 3 ? "top" : ""}`}>{String(row.rank).padStart(2, "0")}</span>
               <ProfileAvatar avatarUrl={row.avatar_url} username={row.username} size={38} />
-              <div className="leader-main"><strong>@{row.username}</strong><span>{row.wins}W / {row.losses}L {row.open_positions.length ? `· Open: ${row.open_positions.map((position) => position.symbol).join(", ")}` : ""}</span></div>
-              <div className="leader-result"><strong className={row.total_profit_gbp >= 0 ? "positive" : "negative"}>{row.total_profit_gbp >= 0 ? "+" : ""}£{row.total_profit_gbp.toFixed(2)}</strong><span>{row.return_pct.toFixed(1)}% return</span></div>
+              <div className="leader-main"><strong>@{row.username} {row.paper_account_verified && <span className="verified-badge">✓ Verified paper</span>}</strong><span>{row.wins}W / {row.losses}L {row.open_positions.length ? `· Open: ${row.open_positions.map((position) => position.symbol).join(", ")}` : ""}</span></div>
+              <div className="leader-result"><strong className={row.combined_profit_gbp >= 0 ? "positive" : "negative"}>{row.combined_profit_gbp >= 0 ? "+" : ""}£{row.combined_profit_gbp.toFixed(2)}</strong><span>{row.paper_account_verified ? `In-app £${row.total_profit_gbp.toFixed(2)} · Verified paper ${row.verified_paper_profit_gbp! >= 0 ? "+" : "−"}£${Math.abs(row.verified_paper_profit_gbp!).toFixed(2)}` : `${row.return_pct.toFixed(1)}% in-app return`}</span></div>
             </button>
           ))}
           {!loading && !error && rows.length === 0 && <div className="dialog-loading">No traders yet. Be the first on the board.</div>}
         </div>
-        <p className="auth-hint">Returns are from simulated practice positions and do not reflect live investment performance.</p>
+        <p className="auth-hint">Verified paper-account results and simulated Trade With returns are displayed separately; paper trading does not reflect live investment performance.</p>
       </section>
     </div>
   );
